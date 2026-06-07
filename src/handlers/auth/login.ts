@@ -19,34 +19,30 @@ export async function login(req: VercelRequest, res: VercelResponse) {
     process.env.SUPABASE_ANON_KEY!
   )
 
-  const { data, error: authError } = await client.auth.signInWithPassword({
-    email: parsed.data.email,
-    password: parsed.data.password,
-  })
-
-  if (authError || !data.session) {
-    return error(res, 'Credenciales invalidas', 401)
-  }
-
-  // Obtener rol
-  const { createClient: createAdmin } = await import('@supabase/supabase-js')
-  const admin = createAdmin(
+  const admin = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-  const { data: appUser } = await admin
-    .from('app_users')
-    .select('role')
-    .eq('id', data.user.id)
-    .single()
+
+  const [authResult, userResult] = await Promise.all([
+    client.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    }),
+    admin.from('app_users').select('role').eq('email', parsed.data.email).single(),
+  ])
+
+  if (authResult.error || !authResult.data.session) {
+    return error(res, 'Credenciales invalidas', 401)
+  }
 
   return json(res, {
-    token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
+    token: authResult.data.session.access_token,
+    refresh_token: authResult.data.session.refresh_token,
     user: {
-      id: data.user.id,
-      email: data.user.email,
-      role: appUser?.role || 'ventas',
+      id: authResult.data.user.id,
+      email: authResult.data.user.email,
+      role: userResult.data?.role || 'ventas',
     },
   })
 }
