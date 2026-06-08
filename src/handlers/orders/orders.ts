@@ -21,6 +21,7 @@ const statusSchema = z.object({
     'entregado',
     'cancelado',
   ]),
+  password: z.string().min(1, 'La contraseña es requerida'),
 })
 
 export async function listOrders(req: VercelRequest, res: VercelResponse) {
@@ -36,6 +37,13 @@ export async function listOrders(req: VercelRequest, res: VercelResponse) {
   // Filtros opcionales
   const status = req.query.status as string
   if (status) query = query.eq('status', status)
+
+  const excludeStatus = req.query.exclude_status as string
+  if (excludeStatus) {
+    excludeStatus.split(',').forEach((s) => {
+      query = query.neq('status', s.trim())
+    })
+  }
 
   const clientId = req.query.client_id as string
   if (clientId) query = query.eq('client_id', clientId)
@@ -131,7 +139,17 @@ export async function updateOrderStatus(req: VercelRequest, res: VercelResponse)
 
   const { id } = (req as any).params
   const parsed = statusSchema.safeParse(req.body)
-  if (!parsed.success) return error(res, 'Status invalido', 400)
+  if (!parsed.success) return error(res, 'Status o contraseña invalidos', 400)
+
+  // Verificar contraseña re-autenticando al usuario
+  const { error: authErr } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: parsed.data.password,
+  })
+
+  if (authErr) {
+    return error(res, 'Contraseña incorrecta', 401)
+  }
 
   const { data, error: dbErr } = await supabase
     .from('orders')
@@ -141,6 +159,49 @@ export async function updateOrderStatus(req: VercelRequest, res: VercelResponse)
     .single()
 
   if (dbErr) return error(res, dbErr.message, 500)
+
+  // Auto-generar piezas al entrar en producción
+  if (parsed.data.status === 'en_produccion') {
+    const { data: existing } = await supabase
+      .from('production_pieces')
+      .select('id')
+      .eq('order_id', id)
+      .limit(1)
+
+    if (!existing || existing.length === 0) {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('*, order_items(*), employees(*)')
+        .eq('id', id)
+        .single()
+
+      if (order) {
+        const employees: any[] = order.employees || []
+        const pieces: any[] = []
+        let empIndex = 0
+
+        for (const item of order.order_items || []) {
+          for (let i = 1; i <= item.quantity; i++) {
+            const emp = employees[empIndex] || null
+            pieces.push({
+              order_id: id,
+              order_item_id: item.id,
+              piece_number: i,
+              employee_id: emp?.id || null,
+              employee_name: emp?.name || null,
+              uniform_type: item.uniform_type,
+              status: 'por_terminar',
+            })
+            if (emp) empIndex++
+          }
+        }
+
+        if (pieces.length > 0) {
+          await supabase.from('production_pieces').insert(pieces)
+        }
+      }
+    }
+  }
 
   await supabase.from('activity_log').insert({
     user_id: user.id,
