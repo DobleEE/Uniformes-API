@@ -21,6 +21,10 @@ import { listMaterials, createMaterial, updateMaterial, deleteMaterial } from '.
 import { getInventory, updateInventory } from '../handlers/inventory/inventory'
 import { listRecipes, upsertRecipe, deleteRecipe } from '../handlers/inventory/recipes'
 import { checkOrderMaterials } from '../handlers/inventory/check'
+import { listEntries, createEntry } from '../handlers/inventory/entries'
+
+// Production pieces
+import { listPieces, generatePieces, updatePieceStatus } from '../handlers/orders/pieces'
 
 // Suppliers
 import { listSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../handlers/suppliers/suppliers'
@@ -77,8 +81,10 @@ export function registerRoutes() {
   put('/api/materials/:id', updateMaterial)
   del('/api/materials/:id', deleteMaterial)
 
-  // Inventory
+  // Inventory — rutas específicas ANTES de las parametrizadas
   get('/api/inventory', getInventory)
+  get('/api/inventory/entries', listEntries)
+  post('/api/inventory/entries', createEntry)
   patch('/api/inventory/:materialId', updateInventory)
 
   // Recipes (BOM)
@@ -88,6 +94,11 @@ export function registerRoutes() {
 
   // Material check for orders
   get('/api/orders/:orderId/check-materials', checkOrderMaterials)
+
+  // Production pieces
+  get('/api/orders/:orderId/pieces', listPieces)
+  post('/api/orders/:orderId/pieces/generate', generatePieces)
+  patch('/api/pieces/:id/status', updatePieceStatus)
 
   // Suppliers
   get('/api/suppliers', listSuppliers)
