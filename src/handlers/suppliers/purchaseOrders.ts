@@ -7,6 +7,7 @@ import { json, error } from '../../utils/response'
 
 const purchaseOrderSchema = z.object({
   supplier_id: z.string().uuid(),
+  order_id: z.string().uuid().optional(),
   items: z.array(
     z.object({
       material_id: z.string().uuid(),
@@ -25,9 +26,30 @@ export async function listPurchaseOrders(req: VercelRequest, res: VercelResponse
   if (!user) return
   if (!authorize(user, 'purchase_orders', res)) return
 
+  let query = supabase
+    .from('purchase_orders')
+    .select('*, suppliers(name), purchase_order_items(*, materials(name, unit))')
+    .order('created_at', { ascending: false })
+
+  const orderId = req.query.order_id as string
+  if (orderId) query = query.eq('order_id', orderId)
+
+  const { data, error: dbErr } = await query
+  if (dbErr) return error(res, dbErr.message, 500)
+  return json(res, data)
+}
+
+export async function listOrderPurchaseOrders(req: VercelRequest, res: VercelResponse) {
+  const user = await authenticate(req, res)
+  if (!user) return
+  if (!authorize(user, 'purchase_orders', res)) return
+
+  const { orderId } = (req as any).params
+
   const { data, error: dbErr } = await supabase
     .from('purchase_orders')
     .select('*, suppliers(name), purchase_order_items(*, materials(name, unit))')
+    .eq('order_id', orderId)
     .order('created_at', { ascending: false })
 
   if (dbErr) return error(res, dbErr.message, 500)
@@ -42,11 +64,11 @@ export async function createPurchaseOrder(req: VercelRequest, res: VercelRespons
   const parsed = purchaseOrderSchema.safeParse(req.body)
   if (!parsed.success) return error(res, parsed.error.message, 400)
 
-  // Crear orden de compra
   const { data: po, error: poErr } = await supabase
     .from('purchase_orders')
     .insert({
       supplier_id: parsed.data.supplier_id,
+      order_id: parsed.data.order_id || null,
       status: 'pendiente',
       created_by: user.id,
     })
@@ -55,7 +77,6 @@ export async function createPurchaseOrder(req: VercelRequest, res: VercelRespons
 
   if (poErr) return error(res, poErr.message, 500)
 
-  // Crear items
   const items = parsed.data.items.map((item) => ({
     ...item,
     purchase_order_id: po.id,
@@ -67,7 +88,6 @@ export async function createPurchaseOrder(req: VercelRequest, res: VercelRespons
 
   if (itemsErr) return error(res, itemsErr.message, 500)
 
-  // Devolver con items
   const { data: full } = await supabase
     .from('purchase_orders')
     .select('*, suppliers(name), purchase_order_items(*, materials(name, unit))')
@@ -103,7 +123,6 @@ export async function updatePurchaseOrderStatus(req: VercelRequest, res: VercelR
 
   if (dbErr) return error(res, dbErr.message, 500)
 
-  // Si se recibió, actualizar inventario
   if (parsed.data.status === 'recibida' && data.purchase_order_items) {
     for (const item of data.purchase_order_items as any[]) {
       const { data: inv } = await supabase
@@ -113,12 +132,19 @@ export async function updatePurchaseOrderStatus(req: VercelRequest, res: VercelR
         .single()
 
       const currentQty = inv?.quantity_available || 0
-      await supabase
-        .from('inventory')
-        .upsert({
-          material_id: item.material_id,
-          quantity_available: currentQty + item.quantity,
-        })
+      await supabase.from('inventory').upsert({
+        material_id: item.material_id,
+        quantity_available: currentQty + item.quantity,
+      })
+
+      await supabase.from('inventory_entries').insert({
+        material_id: item.material_id,
+        quantity: item.quantity,
+        type: 'entrada',
+        order_id: (data as any).order_id || null,
+        notes: 'Recepción de orden de compra',
+        created_by: user.id,
+      })
     }
 
     await supabase.from('activity_log').insert({
