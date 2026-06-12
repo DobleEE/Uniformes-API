@@ -1,6 +1,11 @@
 {
   "buildCommand": "tsc",
   "outputDirectory": "public",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "templates/**"
+    }
+  },
   "routes": [
     {
       "src": "/api/(.*)",

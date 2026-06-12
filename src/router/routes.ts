@@ -26,9 +26,15 @@ import { listEntries, createEntry } from '../handlers/inventory/entries'
 // Production pieces
 import { listPieces, generatePieces, updatePieceStatus } from '../handlers/orders/pieces'
 
+// Quotation
+import { generateQuotation } from '../handlers/orders/quotation'
+
 // Suppliers
 import { listSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../handlers/suppliers/suppliers'
-import { listPurchaseOrders, createPurchaseOrder, updatePurchaseOrderStatus } from '../handlers/suppliers/purchaseOrders'
+import { listPurchaseOrders, createPurchaseOrder, updatePurchaseOrderStatus, listOrderPurchaseOrders } from '../handlers/suppliers/purchaseOrders'
+
+// Landing contacts
+import { listLandingContacts, updateLandingContactStatus } from '../handlers/landing/contacts'
 
 // Dashboard
 import { getDashboard } from '../handlers/dashboard/dashboard'
@@ -100,6 +106,9 @@ export function registerRoutes() {
   post('/api/orders/:orderId/pieces/generate', generatePieces)
   patch('/api/pieces/:id/status', updatePieceStatus)
 
+  // Quotation document
+  get('/api/orders/:id/quotation', generateQuotation)
+
   // Suppliers
   get('/api/suppliers', listSuppliers)
   post('/api/suppliers', createSupplier)
@@ -107,9 +116,14 @@ export function registerRoutes() {
   del('/api/suppliers/:id', deleteSupplier)
 
   // Purchase orders
+  get('/api/orders/:orderId/purchase-orders', listOrderPurchaseOrders)
   get('/api/purchase-orders', listPurchaseOrders)
   post('/api/purchase-orders', createPurchaseOrder)
   patch('/api/purchase-orders/:id/status', updatePurchaseOrderStatus)
+
+  // Landing contacts
+  get('/api/landing-contacts', listLandingContacts)
+  patch('/api/landing-contacts/:id/status', updateLandingContactStatus)
 
   // Dashboard
   get('/api/dashboard', getDashboard)

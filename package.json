@@ -21,6 +21,8 @@
   "homepage": "https://github.com/ModoDiabloSkere/Uniformes-API#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "docxtemplater": "^3.68.7",
+    "pizzip": "^3.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
