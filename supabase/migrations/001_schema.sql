@@ -21,8 +21,6 @@ create table clients (
   company_name text not null,
   address text,
   industry text,
-  phone text,
-  email text,
   created_at timestamptz default now()
 );
 

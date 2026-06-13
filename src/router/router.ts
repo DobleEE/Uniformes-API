@@ -53,8 +53,9 @@ export async function handleRequest(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*')
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Refresh-Token')
   res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Access-Control-Expose-Headers', 'X-New-Access-Token, X-New-Refresh-Token')
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') {
@@ -74,7 +75,7 @@ export async function handleRequest(req: VercelRequest, res: VercelResponse) {
     route.paramNames.forEach((name, i) => {
       params[name] = match[i + 1]
     })
-    ;(req as any).params = params
+      ; (req as any).params = params
 
     try {
       await route.handler(req, res)

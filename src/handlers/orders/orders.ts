@@ -83,7 +83,7 @@ export async function getOrder(req: VercelRequest, res: VercelResponse) {
   const { id } = (req as any).params
   const { data, error: dbErr } = await supabase
     .from('orders')
-    .select('*, clients(company_name, email, phone), order_items(*), employees(*, measurements(*))')
+    .select('*, clients(company_name), order_items(*), employees(*, measurements(*))')
     .eq('id', id)
     .single()
 

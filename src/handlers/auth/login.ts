@@ -63,5 +63,7 @@ export async function login(req: VercelRequest, res: VercelResponse) {
       email: authResult.data.user.email,
       role: userResult.data.role,
     },
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
   })
 }

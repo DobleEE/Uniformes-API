@@ -10,8 +10,6 @@ const clientSchema = z.object({
   company_name: z.string().min(1),
   address: z.string().optional(),
   industry: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
 })
 
 export async function listClients(req: VercelRequest, res: VercelResponse) {
