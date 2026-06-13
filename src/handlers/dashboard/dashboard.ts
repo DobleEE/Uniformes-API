@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
+import { authorize } from '../../middleware/roles'
 import { json, error } from '../../utils/response'
 
 export async function getDashboard(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'dashboard', res)) return
 
   const now = new Date()
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()

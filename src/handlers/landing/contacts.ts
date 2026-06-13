@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
+import { authorize } from '../../middleware/roles'
 import { json, error } from '../../utils/response'
 
 const VALID_STATUSES = ['nueva', 'vista', 'contactada', 'convertida']
@@ -8,6 +9,7 @@ const VALID_STATUSES = ['nueva', 'vista', 'contactada', 'convertida']
 export async function listLandingContacts(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'landing_contacts', res)) return
 
   const { status } = req.query
   let query = supabase
@@ -27,6 +29,7 @@ export async function listLandingContacts(req: VercelRequest, res: VercelRespons
 export async function updateLandingContactStatus(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'landing_contacts', res)) return
 
   const { id } = (req as any).params
   const { status } = req.body

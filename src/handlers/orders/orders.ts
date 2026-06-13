@@ -16,6 +16,18 @@ const orderSchema = z.object({
   additional_info: z.string().optional(),
 })
 
+const updateOrderSchema = z.object({
+  delivery_date: z.string().nullable().optional(),
+  notes: z.string().optional(),
+  advance_payment: z.number().nonnegative().optional(),
+  total_price: z.number().nonnegative().optional(),
+  season: z.string().optional(),
+  delivery_days: z.number().int().positive().optional(),
+  measurements_date: z.string().nullable().optional(),
+  apply_iva: z.boolean().optional(),
+  additional_info: z.string().optional(),
+})
+
 const statusSchema = z.object({
   status: z.enum([
     'cotizacion',
@@ -115,21 +127,28 @@ export async function updateOrder(req: VercelRequest, res: VercelResponse) {
   if (!authorize(user, 'orders', res)) return
 
   const { id } = (req as any).params
-  const body = req.body || {}
+  const parsed = updateOrderSchema.safeParse(req.body)
+  if (!parsed.success) return error(res, parsed.error.message, 400)
+
+  const d = parsed.data
+  const updates: Record<string, unknown> = {}
+  if (d.delivery_date !== undefined) updates.delivery_date = d.delivery_date ?? null
+  if (d.notes !== undefined) updates.notes = d.notes
+  if (d.advance_payment !== undefined) updates.advance_payment = d.advance_payment
+  if (d.total_price !== undefined) updates.total_price = d.total_price
+  if (d.season !== undefined) updates.season = d.season
+  if (d.delivery_days !== undefined) updates.delivery_days = d.delivery_days
+  if (d.measurements_date !== undefined) updates.measurements_date = d.measurements_date ?? null
+  if (d.apply_iva !== undefined) updates.apply_iva = d.apply_iva
+  if (d.additional_info !== undefined) updates.additional_info = d.additional_info
+
+  if (Object.keys(updates).length === 0) {
+    return error(res, 'No hay campos para actualizar', 400)
+  }
 
   const { data, error: dbErr } = await supabase
     .from('orders')
-    .update({
-      ...(body.delivery_date !== undefined && { delivery_date: body.delivery_date || null }),
-      ...(body.notes !== undefined && { notes: body.notes }),
-      ...(body.advance_payment !== undefined && { advance_payment: body.advance_payment }),
-      ...(body.total_price !== undefined && { total_price: body.total_price }),
-      ...(body.season !== undefined && { season: body.season }),
-      ...(body.delivery_days !== undefined && { delivery_days: body.delivery_days }),
-      ...(body.measurements_date !== undefined && { measurements_date: body.measurements_date || null }),
-      ...(body.apply_iva !== undefined && { apply_iva: body.apply_iva }),
-      ...(body.additional_info !== undefined && { additional_info: body.additional_info }),
-    })
+    .update(updates)
     .eq('id', id)
     .select()
     .single()

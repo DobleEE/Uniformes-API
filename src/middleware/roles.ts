@@ -13,6 +13,8 @@ const permissions: Record<UserRole, string[]> = {
     'employees',
     'measurements',
     'catalog',
+    'landing_contacts',
+    'dashboard',
   ],
   almacen: [
     'materials',
@@ -21,6 +23,7 @@ const permissions: Record<UserRole, string[]> = {
     'purchase_orders',
     'purchase_order_items',
     'catalog',
+    'dashboard',
   ],
   confeccion: ['orders:read', 'employees:read', 'measurements:read', 'orders:update_status'],
 }
