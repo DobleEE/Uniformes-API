@@ -16,6 +16,7 @@ const materialSchema = z.object({
   season_year: z.number().int().nullable().optional(),
   color: z.string().nullable().optional(),
   code: z.string().nullable().optional(),
+  piece_type: z.enum(['blusa', 'chaleco', 'pantalon', 'Ch/P']).nullable().optional(),
 })
 
 export async function listMaterials(req: VercelRequest, res: VercelResponse) {
