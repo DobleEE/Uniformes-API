@@ -83,7 +83,7 @@ export async function getOrder(req: VercelRequest, res: VercelResponse) {
   const { id } = (req as any).params
   const { data, error: dbErr } = await supabase
     .from('orders')
-    .select('*, clients(company_name), order_items(*), employees(*, measurements(*))')
+    .select('*, clients(company_name), order_items(*, fabric:fabric_id(id, name, code, color), model:model_id(id, number, season, season_year)), employees(*, measurements(*))')
     .eq('id', id)
     .single()
 
@@ -224,7 +224,7 @@ export async function updateOrderStatus(req: VercelRequest, res: VercelResponse)
               piece_number: i,
               employee_id: emp?.id || null,
               employee_name: emp?.name || null,
-              uniform_type: item.uniform_type,
+              uniform_type: item.piece_type || item.uniform_type,
               status: 'por_terminar',
             })
             if (emp) empIndex++

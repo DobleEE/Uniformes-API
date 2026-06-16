@@ -5,11 +5,19 @@ import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
 import { json, error } from '../../utils/response'
 
-const itemSchema = z.object({
-  uniform_type: z.string().min(1),
+const itemBaseSchema = z.object({
+  uniform_type: z.string().optional(),
+  piece_type: z.string().optional(),
+  fabric_id: z.string().uuid().nullable().optional(),
+  model_id: z.string().uuid().nullable().optional(),
+  item_notes: z.string().nullable().optional(),
   quantity: z.number().int().positive(),
   price_per_unit: z.number().nonnegative(),
 })
+
+function normalizeItem(d: z.infer<typeof itemBaseSchema>) {
+  return { ...d, uniform_type: d.uniform_type || d.piece_type || '' }
+}
 
 async function recalcTotal(orderId: string) {
   const { data: items } = await supabase
@@ -36,7 +44,7 @@ export async function listOrderItems(req: VercelRequest, res: VercelResponse) {
   const { orderId } = (req as any).params
   const { data, error: dbErr } = await supabase
     .from('order_items')
-    .select('*')
+    .select('*, fabric:fabric_id(id, name, code, color), model:model_id(id, number, season, season_year)')
     .eq('order_id', orderId)
 
   if (dbErr) return error(res, dbErr.message, 500)
@@ -49,12 +57,12 @@ export async function createOrderItem(req: VercelRequest, res: VercelResponse) {
   if (!authorize(user, 'order_items', res)) return
 
   const { orderId } = (req as any).params
-  const parsed = itemSchema.safeParse(req.body)
+  const parsed = itemBaseSchema.safeParse(req.body)
   if (!parsed.success) return error(res, parsed.error.message, 400)
 
   const { data, error: dbErr } = await supabase
     .from('order_items')
-    .insert({ ...parsed.data, order_id: orderId })
+    .insert({ ...normalizeItem(parsed.data), order_id: orderId })
     .select()
     .single()
 
@@ -70,7 +78,7 @@ export async function updateOrderItem(req: VercelRequest, res: VercelResponse) {
   if (!authorize(user, 'order_items', res)) return
 
   const { id } = (req as any).params
-  const parsed = itemSchema.partial().safeParse(req.body)
+  const parsed = itemBaseSchema.partial().safeParse(req.body)
   if (!parsed.success) return error(res, parsed.error.message, 400)
 
   const { data, error: dbErr } = await supabase

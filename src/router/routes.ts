@@ -33,6 +33,7 @@ import { generateQuotation } from '../handlers/orders/quotation'
 // Catalog
 import { listCategories, createCategory, updateCategory, deleteCategory } from '../handlers/catalog/categories'
 import { listProducts, createProduct, updateProduct, deleteProduct } from '../handlers/catalog/products'
+import { listModels, createModel, updateModel, deleteModel } from '../handlers/catalog/models'
 
 // Suppliers
 import { listSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../handlers/suppliers/suppliers'
@@ -125,6 +126,12 @@ export function registerRoutes() {
   post('/api/products', createProduct)
   put('/api/products/:id', updateProduct)
   del('/api/products/:id', deleteProduct)
+
+  // Models (maquetas)
+  get('/api/models', listModels)
+  post('/api/models', createModel)
+  put('/api/models/:id', updateModel)
+  del('/api/models/:id', deleteModel)
 
   // Suppliers
   get('/api/suppliers', listSuppliers)

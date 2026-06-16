@@ -11,6 +11,11 @@ const materialSchema = z.object({
   category: z.string().optional(),
   unit: z.string().min(1),
   min_stock: z.number().nonnegative().optional(),
+  fabric_type: z.enum(['linea', 'temporada']).nullable().optional(),
+  season: z.enum(['OI', 'PV']).nullable().optional(),
+  season_year: z.number().int().nullable().optional(),
+  color: z.string().nullable().optional(),
+  code: z.string().nullable().optional(),
 })
 
 export async function listMaterials(req: VercelRequest, res: VercelResponse) {

@@ -15,7 +15,7 @@ export async function generateQuotation(req: VercelRequest, res: VercelResponse)
 
   const { data: order, error: dbErr } = await supabase
     .from('orders')
-    .select('*, clients(*), order_items(*)')
+    .select('*, clients(*), order_items(*, fabric:fabric_id(name, code), model:model_id(number, season, season_year))')
     .eq('id', id)
     .single()
 
@@ -58,12 +58,23 @@ export async function generateQuotation(req: VercelRequest, res: VercelResponse)
     total: fmt(total),
     anticipo: fmt(anticipo),
     saldo: fmt(saldo),
-    items: (order.order_items || []).map((item: any) => ({
-      tipo_uniforme: item.uniform_type,
-      cantidad: String(item.quantity),
-      precio_unitario: fmt(Number(item.price_per_unit)),
-      subtotal: fmt(item.quantity * Number(item.price_per_unit)),
-    })),
+    items: (order.order_items || []).map((item: any) => {
+      const pieceLabel = item.piece_type || item.uniform_type || ''
+      const modelLabel = item.model
+        ? `Mod. #${item.model.number} ${item.model.season}${item.model.season_year}`
+        : ''
+      const fabricLabel = item.fabric ? item.fabric.name : ''
+      const tipoUniforme = [pieceLabel, modelLabel, fabricLabel].filter(Boolean).join(' · ')
+      return {
+        tipo_uniforme: tipoUniforme || pieceLabel,
+        tela: fabricLabel,
+        modelo: modelLabel,
+        cantidad: String(item.quantity),
+        precio_unitario: fmt(Number(item.price_per_unit)),
+        subtotal: fmt(item.quantity * Number(item.price_per_unit)),
+        observaciones: item.item_notes || '',
+      }
+    }),
   })
 
   try {
