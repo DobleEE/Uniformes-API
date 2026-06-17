@@ -14,19 +14,31 @@ export async function getInventory(req: VercelRequest, res: VercelResponse) {
   if (!user) return
   if (!authorize(user, 'inventory', res)) return
 
-  const { data, error: dbErr } = await supabase
-    .from('inventory')
-    .select('*, materials(name, category, unit, min_stock)')
-    .order('materials(name)')
+  const [{ data, error: dbErr }, { data: activeItems }] = await Promise.all([
+    supabase
+      .from('inventory')
+      .select('*, materials(name, category, unit, min_stock)')
+      .order('materials(name)'),
+    supabase
+      .from('order_items')
+      .select('fabric_id, orders!inner(status)')
+      .not('fabric_id', 'is', null),
+  ])
 
   if (dbErr) return error(res, dbErr.message, 500)
 
-  // Agregar alerta de stock bajo
+  const activeFabricIds = new Set(
+    (activeItems || [])
+      .filter((item: any) => !['entregado', 'cancelado'].includes(item.orders?.status))
+      .map((item: any) => item.fabric_id)
+  )
+
   const enriched = (data || []).map((item: any) => ({
     ...item,
     low_stock:
       item.materials?.min_stock != null &&
-      item.quantity_available <= item.materials.min_stock,
+      item.quantity_available <= item.materials.min_stock &&
+      activeFabricIds.has(item.material_id),
   }))
 
   return json(res, enriched)

@@ -12,11 +12,14 @@ export async function getDashboard(req: VercelRequest, res: VercelResponse) {
   const now = new Date()
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
+  const INACTIVE_STATUSES = ['entregado', 'cancelado']
+
   const [
     ordersInProd,
     ordersDelivered,
     ordersPending,
     lowStock,
+    activeOrderItems,
     recentActivity,
     monthlyRevenue,
   ] = await Promise.all([
@@ -45,6 +48,12 @@ export async function getDashboard(req: VercelRequest, res: VercelResponse) {
       .select('material_id, quantity_available, materials(name, min_stock)')
       .not('materials.min_stock', 'is', null),
 
+    // Telas usadas en pedidos activos (no entregados ni cancelados)
+    supabase
+      .from('order_items')
+      .select('fabric_id, orders!inner(status)')
+      .not('fabric_id', 'is', null),
+
     // Actividad reciente
     supabase
       .from('activity_log')
@@ -60,10 +69,17 @@ export async function getDashboard(req: VercelRequest, res: VercelResponse) {
       .gte('created_at', firstOfMonth),
   ])
 
+  const activeFabricIds = new Set(
+    (activeOrderItems.data || [])
+      .filter((item: any) => !INACTIVE_STATUSES.includes(item.orders?.status))
+      .map((item: any) => item.fabric_id)
+  )
+
   const lowStockItems = (lowStock.data || []).filter(
     (item: any) =>
       item.materials?.min_stock != null &&
-      item.quantity_available <= item.materials.min_stock
+      item.quantity_available <= item.materials.min_stock &&
+      activeFabricIds.has(item.material_id)
   )
 
   const revenue = (monthlyRevenue.data || []).reduce(
