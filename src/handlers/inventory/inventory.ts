@@ -17,7 +17,7 @@ export async function getInventory(req: VercelRequest, res: VercelResponse) {
   const [{ data, error: dbErr }, { data: activeItems }] = await Promise.all([
     supabase
       .from('inventory')
-      .select('*, materials(name, category, unit, min_stock)')
+      .select('*, materials(*)')
       .order('materials(name)'),
     supabase
       .from('order_items')
