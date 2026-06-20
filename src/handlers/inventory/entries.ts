@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const entrySchema = z
   .object({
@@ -32,7 +32,7 @@ export async function listEntries(req: VercelRequest, res: VercelResponse) {
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   res.setHeader('X-Total-Count', String(count ?? 0))
   return json(res, data)
 }
@@ -55,29 +55,18 @@ export async function createEntry(req: VercelRequest, res: VercelResponse) {
 
   if (!material) return error(res, 'Material no encontrado', 404)
 
-  // Crear el registro de movimiento
-  const { data: entry, error: entryErr } = await supabase
-    .from('inventory_entries')
-    .insert({
-      material_id,
-      quantity,
-      order_id: order_id || null,
-      type,
-      notes: notes || null,
-      created_by: user.id,
-    })
-    .select()
-    .single()
-
-  if (entryErr) return error(res, entryErr.message, 500)
-
-  // Actualizar el stock de forma atómica (evita race conditions)
-  const delta = type === 'salida' ? -quantity : quantity
-
-  await supabase.rpc('adjust_inventory_quantity', {
+  // Movimiento + ajuste de stock en una sola transacción (atómico, sin
+  // race conditions y sin que el historial diverja del stock).
+  const { data: entry, error: entryErr } = await supabase.rpc('record_inventory_entry', {
     p_material_id: material_id,
-    p_delta: delta,
+    p_quantity: quantity,
+    p_type: type,
+    p_order_id: order_id || null,
+    p_notes: notes || null,
+    p_created_by: user.id,
   })
+
+  if (entryErr) return serverError(res, entryErr)
 
   await supabase.from('activity_log').insert({
     user_id: user.id,

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const updateSchema = z.object({
   quantity_available: z.number().nonnegative(),
@@ -25,7 +25,7 @@ export async function getInventory(req: VercelRequest, res: VercelResponse) {
       .not('fabric_id', 'is', null),
   ])
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   const activeFabricIds = new Set(
     (activeItems || [])
@@ -72,7 +72,7 @@ export async function updateInventory(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   // Registrar el movimiento en el historial solo si hubo cambio
   if (delta !== 0) {

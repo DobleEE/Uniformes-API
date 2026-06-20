@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const itemBaseSchema = z.object({
   uniform_type: z.string().optional(),
@@ -47,7 +47,7 @@ export async function listOrderItems(req: VercelRequest, res: VercelResponse) {
     .select('*, fabric:fabric_id(id, name, code, color), model:model_id(id, number, season, season_year)')
     .eq('order_id', orderId)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -66,7 +66,7 @@ export async function createOrderItem(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   await recalcTotal(orderId)
   return json(res, data, 201)
@@ -88,7 +88,7 @@ export async function updateOrderItem(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   await recalcTotal(data.order_id)
   return json(res, data)
@@ -113,7 +113,7 @@ export async function deleteOrderItem(req: VercelRequest, res: VercelResponse) {
     .delete()
     .eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   if (item) await recalcTotal(item.order_id)
   return json(res, { success: true })

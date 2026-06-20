@@ -2,7 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
-import { json, error } from '../../utils/response'
+import { authorize } from '../../middleware/roles'
+import { json, error, serverError } from '../../utils/response'
 
 const statusSchema = z.object({
   status: z.enum(['por_terminar', 'terminada']),
@@ -12,6 +13,7 @@ const statusSchema = z.object({
 export async function listPieces(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'orders', res, 'read')) return
 
   const { orderId } = (req as any).params
 
@@ -22,7 +24,7 @@ export async function listPieces(req: VercelRequest, res: VercelResponse) {
     .order('order_item_id')
     .order('piece_number')
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data || [])
 }
 
@@ -85,7 +87,7 @@ export async function generatePieces(req: VercelRequest, res: VercelResponse) {
     .insert(pieces)
     .select()
 
-  if (insertErr) return error(res, insertErr.message, 500)
+  if (insertErr) return serverError(res, insertErr)
 
   await supabase.from('activity_log').insert({
     user_id: user.id,
@@ -129,7 +131,7 @@ export async function updatePieceStatus(req: VercelRequest, res: VercelResponse)
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   await supabase.from('activity_log').insert({
     user_id: user.id,

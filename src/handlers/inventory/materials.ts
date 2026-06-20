@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 import { parsePagination } from '../../utils/pagination'
 
 const materialSchema = z.object({
@@ -32,7 +32,7 @@ export async function listMaterials(req: VercelRequest, res: VercelResponse) {
     .order('name')
     .range(offset, offset + limit - 1)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   res.setHeader('X-Total-Count', String(count ?? 0))
   return json(res, data)
 }
@@ -51,7 +51,7 @@ export async function createMaterial(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   // Crear registro de inventario con stock 0
   await supabase
@@ -77,7 +77,7 @@ export async function updateMaterial(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -92,6 +92,6 @@ export async function deleteMaterial(req: VercelRequest, res: VercelResponse) {
     .delete()
     .eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }

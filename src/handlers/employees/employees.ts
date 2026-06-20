@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const employeeSchema = z.object({
   name: z.string().min(1),
@@ -23,7 +23,7 @@ export async function listEmployees(req: VercelRequest, res: VercelResponse) {
     .eq('order_id', orderId)
     .order('name')
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -58,7 +58,7 @@ export async function createEmployee(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data, 201)
 }
 
@@ -78,7 +78,7 @@ export async function updateEmployee(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -93,6 +93,6 @@ export async function deleteEmployee(req: VercelRequest, res: VercelResponse) {
     .delete()
     .eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }

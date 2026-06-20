@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 interface MaterialCheck {
   material_id: string
@@ -27,7 +27,7 @@ export async function checkOrderMaterials(req: VercelRequest, res: VercelRespons
     .select('uniform_type, quantity')
     .eq('order_id', orderId)
 
-  if (itemsErr) return error(res, itemsErr.message, 500)
+  if (itemsErr) return serverError(res, itemsErr)
   if (!items || items.length === 0) {
     return json(res, { checks: [], can_produce: true })
   }
