@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 import { parsePagination } from '../../utils/pagination'
 
 const purchaseOrderSchema = z.object({
@@ -38,7 +38,7 @@ export async function listPurchaseOrders(req: VercelRequest, res: VercelResponse
   if (orderId) query = query.eq('order_id', orderId)
 
   const { data, count, error: dbErr } = await query.range(offset, offset + limit - 1)
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   res.setHeader('X-Total-Count', String(count ?? 0))
   return json(res, data)
 }
@@ -56,7 +56,7 @@ export async function listOrderPurchaseOrders(req: VercelRequest, res: VercelRes
     .eq('order_id', orderId)
     .order('created_at', { ascending: false })
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -68,29 +68,19 @@ export async function createPurchaseOrder(req: VercelRequest, res: VercelRespons
   const parsed = purchaseOrderSchema.safeParse(req.body)
   if (!parsed.success) return error(res, parsed.error.message, 400)
 
-  const { data: po, error: poErr } = await supabase
-    .from('purchase_orders')
-    .insert({
-      supplier_id: parsed.data.supplier_id,
-      order_id: parsed.data.order_id || null,
-      status: 'pendiente',
-      created_by: user.id,
-    })
-    .select()
-    .single()
+  if (parsed.data.items.length === 0) {
+    return error(res, 'La orden de compra debe tener al menos un item', 400)
+  }
 
-  if (poErr) return error(res, poErr.message, 500)
+  // Cabecera + items en una sola transacción (evita órdenes huérfanas).
+  const { data: po, error: poErr } = await supabase.rpc('create_purchase_order', {
+    p_supplier_id: parsed.data.supplier_id,
+    p_order_id: parsed.data.order_id || null,
+    p_items: parsed.data.items,
+    p_created_by: user.id,
+  })
 
-  const items = parsed.data.items.map((item) => ({
-    ...item,
-    purchase_order_id: po.id,
-  }))
-
-  const { error: itemsErr } = await supabase
-    .from('purchase_order_items')
-    .insert(items)
-
-  if (itemsErr) return error(res, itemsErr.message, 500)
+  if (poErr) return serverError(res, poErr)
 
   const { data: full } = await supabase
     .from('purchase_orders')
@@ -118,32 +108,14 @@ export async function updatePurchaseOrderStatus(req: VercelRequest, res: VercelR
   const parsed = statusSchema.safeParse(req.body)
   if (!parsed.success) return error(res, 'Status invalido', 400)
 
-  const { data, error: dbErr } = await supabase
-    .from('purchase_orders')
-    .update({ status: parsed.data.status })
-    .eq('id', id)
-    .select('*, purchase_order_items(*)')
-    .single()
-
-  if (dbErr) return error(res, dbErr.message, 500)
-
-  if (parsed.data.status === 'recibida' && data.purchase_order_items) {
-    for (const item of data.purchase_order_items as any[]) {
-      // Actualizar stock de forma atómica (evita race conditions)
-      await supabase.rpc('adjust_inventory_quantity', {
-        p_material_id: item.material_id,
-        p_delta: item.quantity,
-      })
-
-      await supabase.from('inventory_entries').insert({
-        material_id: item.material_id,
-        quantity: item.quantity,
-        type: 'entrada',
-        order_id: (data as any).order_id || null,
-        notes: 'Recepción de orden de compra',
-        created_by: user.id,
-      })
-    }
+  // Recepción: idempotente y atómica (status + entradas + stock en una sola
+  // transacción; re-recibir NO vuelve a sumar inventario). Ver migración 010.
+  if (parsed.data.status === 'recibida') {
+    const { error: rpcErr } = await supabase.rpc('receive_purchase_order', {
+      p_po_id: id,
+      p_user_id: user.id,
+    })
+    if (rpcErr) return serverError(res, rpcErr)
 
     await supabase.from('activity_log').insert({
       user_id: user.id,
@@ -152,7 +124,20 @@ export async function updatePurchaseOrderStatus(req: VercelRequest, res: VercelR
       entity_id: id,
       details: 'Orden recibida - inventario actualizado',
     })
+  } else {
+    const { error: dbErr } = await supabase
+      .from('purchase_orders')
+      .update({ status: parsed.data.status })
+      .eq('id', id)
+    if (dbErr) return serverError(res, dbErr)
   }
 
+  const { data, error: fetchErr } = await supabase
+    .from('purchase_orders')
+    .select('*, purchase_order_items(*)')
+    .eq('id', id)
+    .single()
+
+  if (fetchErr) return serverError(res, fetchErr)
   return json(res, data)
 }

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const modelSchema = z.object({
   number: z.string().min(1),
@@ -21,6 +21,7 @@ const FABRIC_SELECT = 'id, name, code, color, fabric_type, season, season_year'
 export async function listModels(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'catalog', res, 'read')) return
 
   let query = supabase
     .from('models')
@@ -37,7 +38,7 @@ export async function listModels(req: VercelRequest, res: VercelResponse) {
   if (req.query.active === 'true') query = query.eq('active', true)
 
   const { data, error: dbErr } = await query
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -60,7 +61,7 @@ export async function createModel(req: VercelRequest, res: VercelResponse) {
     `)
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data, 201)
 }
 
@@ -85,7 +86,7 @@ export async function updateModel(req: VercelRequest, res: VercelResponse) {
     `)
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -96,6 +97,6 @@ export async function deleteModel(req: VercelRequest, res: VercelResponse) {
 
   const { id } = (req as any).params
   const { error: dbErr } = await supabase.from('models').delete().eq('id', id)
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }

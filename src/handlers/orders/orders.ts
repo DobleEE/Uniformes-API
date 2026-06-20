@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize, hasPermission } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 import { parsePagination } from '../../utils/pagination'
 
 const orderSchema = z.object({
@@ -29,6 +29,15 @@ const updateOrderSchema = z.object({
   additional_info: z.string().optional(),
 })
 
+type OrderStatus =
+  | 'cotizacion'
+  | 'aprobado'
+  | 'anticipo_pagado'
+  | 'en_produccion'
+  | 'terminado'
+  | 'entregado'
+  | 'cancelado'
+
 const statusSchema = z.object({
   status: z.enum([
     'cotizacion',
@@ -41,6 +50,21 @@ const statusSchema = z.object({
   ]),
   password: z.string().min(1, 'La contraseña es requerida'),
 })
+
+// Máquina de estados: transiciones permitidas desde cada status.
+// Evita saltos arbitrarios (p. ej. cotizacion -> entregado) y reaperturas.
+const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  cotizacion: ['aprobado', 'cancelado'],
+  aprobado: ['anticipo_pagado', 'cancelado'],
+  anticipo_pagado: ['en_produccion', 'cancelado'],
+  en_produccion: ['terminado', 'cancelado'],
+  terminado: ['entregado'],
+  entregado: [],
+  cancelado: [],
+}
+
+// Status que el rol 'confeccion' puede establecer (solo avance de producción).
+const CONFECCION_ALLOWED_TARGETS: OrderStatus[] = ['terminado']
 
 export async function listOrders(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
@@ -70,7 +94,7 @@ export async function listOrders(req: VercelRequest, res: VercelResponse) {
 
   const { data, count, error: dbErr } = await query.range(offset, offset + limit - 1)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   res.setHeader('X-Total-Count', String(count ?? 0))
   return json(res, data)
 }
@@ -111,7 +135,7 @@ export async function createOrder(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   // Log de actividad
   await supabase.from('activity_log').insert({
@@ -157,7 +181,7 @@ export async function updateOrder(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -173,6 +197,34 @@ export async function updateOrderStatus(req: VercelRequest, res: VercelResponse)
   const { id } = (req as any).params
   const parsed = statusSchema.safeParse(req.body)
   if (!parsed.success) return error(res, 'Status o contraseña invalidos', 400)
+
+  const targetStatus = parsed.data.status as OrderStatus
+
+  // Validar la transición contra el estado actual del pedido
+  const { data: currentOrder, error: currentErr } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', id)
+    .single()
+
+  if (currentErr || !currentOrder) return error(res, 'Pedido no encontrado', 404)
+
+  const currentStatus = currentOrder.status as OrderStatus
+  if (currentStatus !== targetStatus) {
+    const allowed = STATUS_TRANSITIONS[currentStatus] ?? []
+    if (!allowed.includes(targetStatus)) {
+      return error(res, `Transición de estado no permitida: ${currentStatus} → ${targetStatus}`, 409)
+    }
+  }
+
+  // El rol confección solo puede avanzar la producción (no entregar/cancelar)
+  if (
+    user.role === 'confeccion' &&
+    !hasPermission(user, 'orders', 'write') &&
+    !CONFECCION_ALLOWED_TARGETS.includes(targetStatus)
+  ) {
+    return error(res, 'Tu rol no puede establecer este estado', 403)
+  }
 
   // Verificar contraseña e invalidar la sesión nueva de inmediato
   const { data: verifyData, error: authErr } = await supabase.auth.signInWithPassword({
@@ -193,7 +245,7 @@ export async function updateOrderStatus(req: VercelRequest, res: VercelResponse)
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
 
   // Auto-generar piezas al entrar en producción
   if (parsed.data.status === 'en_produccion') {

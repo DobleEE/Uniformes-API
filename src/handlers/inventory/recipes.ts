@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const recipeSchema = z.object({
   uniform_type: z.string().min(1),
@@ -25,7 +25,7 @@ export async function listRecipes(req: VercelRequest, res: VercelResponse) {
   if (uniformType) query = query.eq('uniform_type', uniformType)
 
   const { data, error: dbErr } = await query
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -45,7 +45,7 @@ export async function upsertRecipe(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -60,6 +60,6 @@ export async function deleteRecipe(req: VercelRequest, res: VercelResponse) {
     .delete()
     .eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }

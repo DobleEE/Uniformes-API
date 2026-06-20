@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 import { parsePagination } from '../../utils/pagination'
 
 const clientSchema = z.object({
@@ -25,7 +25,7 @@ export async function listClients(req: VercelRequest, res: VercelResponse) {
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   res.setHeader('X-Total-Count', String(count ?? 0))
   return json(res, data)
 }
@@ -60,7 +60,7 @@ export async function createClient(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data, 201)
 }
 
@@ -80,7 +80,7 @@ export async function updateClient(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -92,6 +92,6 @@ export async function deleteClient(req: VercelRequest, res: VercelResponse) {
   const { id } = (req as any).params
   const { error: dbErr } = await supabase.from('clients').delete().eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const schema = z.object({
   category_id: z.string().uuid(),
@@ -17,6 +17,7 @@ const schema = z.object({
 export async function listProducts(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'catalog', res, 'read')) return
 
   let query = supabase
     .from('products')
@@ -31,7 +32,7 @@ export async function listProducts(req: VercelRequest, res: VercelResponse) {
   if (activeOnly) query = query.eq('active', true)
 
   const { data, error: dbErr } = await query
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -49,7 +50,7 @@ export async function createProduct(req: VercelRequest, res: VercelResponse) {
     .select('*, product_categories(name)')
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data, 201)
 }
 
@@ -69,7 +70,7 @@ export async function updateProduct(req: VercelRequest, res: VercelResponse) {
     .select('*, product_categories(name)')
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -84,6 +85,6 @@ export async function deleteProduct(req: VercelRequest, res: VercelResponse) {
     .delete()
     .eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }

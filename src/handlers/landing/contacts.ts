@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const VALID_STATUSES = ['nueva', 'vista', 'contactada', 'convertida']
 
@@ -22,7 +22,7 @@ export async function listLandingContacts(req: VercelRequest, res: VercelRespons
   }
 
   const { data, error: err } = await query
-  if (err) return error(res, err.message)
+  if (err) return serverError(res, err)
   return json(res, data)
 }
 
@@ -45,6 +45,6 @@ export async function updateLandingContactStatus(req: VercelRequest, res: Vercel
     .select()
     .single()
 
-  if (err) return error(res, err.message)
+  if (err) return serverError(res, err)
   return json(res, data)
 }

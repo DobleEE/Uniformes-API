@@ -5,11 +5,13 @@ import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
+import { authorize } from '../../middleware/roles'
 import { error } from '../../utils/response'
 
 export async function generateQuotation(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'orders', res, 'read')) return
 
   const { id } = (req as any).params
 

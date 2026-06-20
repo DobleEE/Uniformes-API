@@ -45,12 +45,30 @@ export function del(path: string, handler: Handler) {
 }
 
 export async function handleRequest(req: VercelRequest, res: VercelResponse) {
-  // CORS — restringido al origen del frontend configurado en ALLOWED_ORIGIN
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || ''
-  if (allowedOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*')
+  // CORS — fail-closed. Solo se reflejan orígenes de la allowlist
+  // (ALLOWED_ORIGIN, separada por comas). NUNCA se refleja un origen
+  // arbitrario junto con Allow-Credentials. En local (sin VERCEL) se
+  // permite localhost/127.0.0.1 para desarrollo.
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+  const requestOrigin = req.headers.origin || ''
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin)
+
+  let originToAllow = ''
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    originToAllow = requestOrigin
+  } else if (!process.env.VERCEL && isLocalhost) {
+    originToAllow = requestOrigin
+  } else if (allowedOrigins.length > 0) {
+    // Origen no permitido: se devuelve el origen canónico configurado, que
+    // no coincidirá con el del atacante, por lo que el navegador bloqueará
+    // la respuesta con credenciales.
+    originToAllow = allowedOrigins[0]
+  }
+  if (originToAllow) {
+    res.setHeader('Access-Control-Allow-Origin', originToAllow)
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Refresh-Token')

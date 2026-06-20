@@ -9,8 +9,15 @@ const schema = z.object({
   password: z.string().min(6),
 })
 
-const RATE_LIMIT_MAX = 5
+const RATE_LIMIT_MAX = 5        // intentos fallidos por email
+const RATE_LIMIT_IP_MAX = 20    // intentos fallidos por IP (frena el spray de emails)
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutos
+
+function getClientIp(req: VercelRequest): string {
+  const fwd = req.headers['x-forwarded-for']
+  const raw = Array.isArray(fwd) ? fwd[0] : fwd
+  return (raw?.split(',')[0].trim()) || req.socket?.remoteAddress || 'unknown'
+}
 
 export async function login(req: VercelRequest, res: VercelResponse) {
   const parsed = schema.safeParse(req.body)
@@ -19,17 +26,27 @@ export async function login(req: VercelRequest, res: VercelResponse) {
   }
 
   const email = parsed.data.email
+  const ip = getClientIp(req)
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString()
 
-  const { count: failedCount } = await supabase
-    .from('activity_log')
-    .select('id', { count: 'exact', head: true })
-    .eq('action', 'login_failed')
-    .eq('entity', 'auth')
-    .eq('details', email)
-    .gte('created_at', windowStart)
+  const [{ count: failedByEmail }, { count: failedByIp }] = await Promise.all([
+    supabase
+      .from('activity_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('action', 'login_failed')
+      .eq('entity', 'auth')
+      .eq('details', email)
+      .gte('created_at', windowStart),
+    supabase
+      .from('activity_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('action', 'login_failed')
+      .eq('entity', 'auth')
+      .eq('ip', ip)
+      .gte('created_at', windowStart),
+  ])
 
-  if ((failedCount || 0) >= RATE_LIMIT_MAX) {
+  if ((failedByEmail || 0) >= RATE_LIMIT_MAX || (failedByIp || 0) >= RATE_LIMIT_IP_MAX) {
     return error(res, 'Demasiados intentos fallidos. Intenta de nuevo en 15 minutos.', 429)
   }
 
@@ -43,6 +60,7 @@ export async function login(req: VercelRequest, res: VercelResponse) {
       action: 'login_failed',
       entity: 'auth',
       details: email,
+      ip,
     })
     return error(res, 'Credenciales invalidas', 401)
   }

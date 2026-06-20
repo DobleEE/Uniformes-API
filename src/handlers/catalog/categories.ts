@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { supabase } from '../../db/supabase'
 import { authenticate } from '../../middleware/auth'
 import { authorize } from '../../middleware/roles'
-import { json, error } from '../../utils/response'
+import { json, error, serverError } from '../../utils/response'
 
 const schema = z.object({
   name: z.string().min(1),
@@ -15,6 +15,7 @@ const schema = z.object({
 export async function listCategories(req: VercelRequest, res: VercelResponse) {
   const user = await authenticate(req, res)
   if (!user) return
+  if (!authorize(user, 'catalog', res, 'read')) return
 
   const { data, error: dbErr } = await supabase
     .from('product_categories')
@@ -22,7 +23,7 @@ export async function listCategories(req: VercelRequest, res: VercelResponse) {
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -40,7 +41,7 @@ export async function createCategory(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data, 201)
 }
 
@@ -60,7 +61,7 @@ export async function updateCategory(req: VercelRequest, res: VercelResponse) {
     .select()
     .single()
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, data)
 }
 
@@ -75,6 +76,6 @@ export async function deleteCategory(req: VercelRequest, res: VercelResponse) {
     .delete()
     .eq('id', id)
 
-  if (dbErr) return error(res, dbErr.message, 500)
+  if (dbErr) return serverError(res, dbErr)
   return json(res, { success: true })
 }
