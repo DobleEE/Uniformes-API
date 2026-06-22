@@ -59,7 +59,7 @@ export async function handleRequest(req: VercelRequest, res: VercelResponse) {
   let originToAllow = ''
   if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
     originToAllow = requestOrigin
-  } else if (!process.env.VERCEL && isLocalhost) {
+  } else if (isLocalhost) {
     originToAllow = requestOrigin
   } else if (allowedOrigins.length > 0) {
     // Origen no permitido: se devuelve el origen canónico configurado, que
