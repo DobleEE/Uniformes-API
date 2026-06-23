@@ -135,7 +135,8 @@ export async function generateClientPurchaseOrder(req: VercelRequest, res: Verce
       .toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
       .toUpperCase()
 
-  const seasonLabel = up(order.season || 'TEMPORADA')
+  const SEASON_LABELS: Record<string, string> = { OI: 'OTOÑO/INVIERNO', PV: 'PRIMAVERA/VERANO' }
+  const seasonLabel = SEASON_LABELS[order.season] ?? up(order.season || 'TEMPORADA')
   const dateStr     = fmtDate(order.created_at)
   const companyName = up(client.company_name)
   const contactName = up(contact.name)
