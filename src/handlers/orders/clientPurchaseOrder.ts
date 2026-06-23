@@ -108,13 +108,26 @@ export async function generateClientPurchaseOrder(req: VercelRequest, res: Verce
 
   const { data: order, error: dbErr } = await supabase
     .from('orders')
-    .select(
-      '*, clients(*, client_contacts(*)), order_items(*, fabric:fabric_id(name, code, color), model:model_id(number, season, season_year))',
-    )
+    .select('*, order_items(*, fabric:fabric_id(name, code, color), model:model_id(number, season, season_year))')
     .eq('id', id)
     .single()
 
   if (dbErr || !order) return error(res, 'Pedido no encontrado', 404)
+
+  // Fetch client + contacts separately to avoid nested-join ambiguity
+  let client: any = {}
+  let contacts: any[] = []
+  if (order.client_id) {
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('*, client_contacts(*)')
+      .eq('id', order.client_id)
+      .single()
+    if (clientData) {
+      client = clientData
+      contacts = Array.isArray(clientData.client_contacts) ? clientData.client_contacts : []
+    }
+  }
 
   const templatePath = path.join(process.cwd(), 'templates', 'plantilla_ordenCompra.xlsx')
   if (!fs.existsSync(templatePath)) {
@@ -127,8 +140,6 @@ export async function generateClientPurchaseOrder(req: VercelRequest, res: Verce
 
   // ── Data preparation ──────────────────────────────────────────────────────
 
-  const client: any  = order.clients || {}
-  const contacts: any[] = Array.isArray(client.client_contacts) ? client.client_contacts : []
   const contact: any = contacts[0] || {}
   const items: any[] = Array.isArray(order.order_items) ? (order.order_items as any[]).slice(0, 10) : []
 
