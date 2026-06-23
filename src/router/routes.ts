@@ -30,6 +30,7 @@ import { listPieces, generatePieces, updatePieceStatus } from '../handlers/order
 // Quotation
 import { generateQuotation } from '../handlers/orders/quotation'
 import { generateStandaloneQuotation } from '../handlers/orders/standaloneQuotation'
+import { generateClientPurchaseOrder } from '../handlers/orders/clientPurchaseOrder'
 
 // Catalog
 import { listCategories, createCategory, updateCategory, deleteCategory } from '../handlers/catalog/categories'
@@ -116,6 +117,9 @@ export function registerRoutes() {
 
   // Quotation document (from existing order)
   get('/api/orders/:id/quotation', generateQuotation)
+
+  // Client purchase order (xlsx, from existing order)
+  get('/api/orders/:id/purchase-order', generateClientPurchaseOrder)
 
   // Standalone quotation (pre-order, no DB record needed)
   post('/api/quotations/generate', generateStandaloneQuotation)
